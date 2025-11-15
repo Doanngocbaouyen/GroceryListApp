@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -31,7 +31,10 @@ export default function MainScreen() {
   const [quantity, setQuantity] = useState("1");
   const [category, setCategory] = useState("");
 
-  // Load dữ liệu
+  // Search
+  const [searchText, setSearchText] = useState("");
+
+  // Load dữ liệu từ SQLite
   const loadItems = async () => {
     try {
       const rows = await db.getAllAsync(
@@ -59,13 +62,11 @@ export default function MainScreen() {
 
     try {
       if (editingItem) {
-        // ✅ UPDATE món
         await db.runAsync(
           `UPDATE grocery_items SET name = ?, quantity = ?, category = ? WHERE id = ?;`,
           [name, qty, category || "", editingItem.id]
         );
       } else {
-        // ✅ INSERT món mới
         const now = Math.floor(Date.now() / 1000);
         await db.runAsync(
           `INSERT INTO grocery_items (name, quantity, category, created_at, bought)
@@ -101,7 +102,6 @@ export default function MainScreen() {
     }
   };
 
-  // Mở modal edit
   const editItem = (item: GroceryItem) => {
     setEditingItem(item);
     setName(item.name);
@@ -109,6 +109,12 @@ export default function MainScreen() {
     setCategory(item.category);
     setModalVisible(true);
   };
+
+  // ✅ Filter danh sách theo search text (useMemo để tối ưu)
+  const filteredItems = useMemo(() => {
+    const lower = searchText.toLowerCase();
+    return items.filter((item) => item.name.toLowerCase().includes(lower));
+  }, [items, searchText]);
 
   const renderItem = ({ item }: { item: GroceryItem }) => (
     <TouchableOpacity onPress={() => toggleBought(item)}>
@@ -127,20 +133,23 @@ export default function MainScreen() {
           </Text>
         </View>
 
-        <View style={{ alignItems: "flex-end" }}>
-          <Text style={[styles.status, item.bought ? styles.bought : styles.notBought]}>
-            {item.bought ? "✓ Đã mua" : "Chưa mua"}
-          </Text>
-          <TouchableOpacity onPress={() => editItem(item)}>
-            <Text style={{ color: "#2196F3", marginTop: 4 }}>Sửa</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={() => editItem(item)}>
+          <Text style={{ color: "#2196F3", marginTop: 4 }}>Sửa</Text>
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
+      {/* Search */}
+      <TextInput
+        placeholder="Tìm kiếm..."
+        style={styles.searchInput}
+        value={searchText}
+        onChangeText={setSearchText}
+      />
+
       {/* Nút + */}
       <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
         <Text style={styles.addButtonText}>+</Text>
@@ -149,11 +158,11 @@ export default function MainScreen() {
       {/* FlatList */}
       {loading ? (
         <Text>Đang tải dữ liệu...</Text>
-      ) : items.length === 0 ? (
-        <Text style={styles.emptyText}>Danh sách trống, thêm món cần mua nhé!</Text>
+      ) : filteredItems.length === 0 ? (
+        <Text style={styles.emptyText}>Danh sách trống hoặc không tìm thấy kết quả</Text>
       ) : (
         <FlatList
-          data={items}
+          data={filteredItems}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderItem}
           contentContainerStyle={{ paddingBottom: 20 }}
@@ -212,6 +221,13 @@ export default function MainScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: "#fff" },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 6,
+    padding: 8,
+    marginBottom: 12,
+  },
   itemContainer: {
     flexDirection: "row",
     padding: 12,
