@@ -26,6 +26,7 @@ export default function MainScreen() {
 
   // Modal state
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [category, setCategory] = useState("");
@@ -48,32 +49,43 @@ export default function MainScreen() {
     loadItems();
   }, []);
 
-  // Thêm mới
-  const addItem = async () => {
+  // Thêm hoặc cập nhật món
+  const saveItem = async () => {
     if (!name.trim()) {
       Alert.alert("Lỗi", "Tên món không được rỗng!");
       return;
     }
     const qty = parseInt(quantity) || 1;
-    const now = Math.floor(Date.now() / 1000);
 
     try {
-      await db.runAsync(
-        `INSERT INTO grocery_items (name, quantity, category, created_at, bought)
-         VALUES (?, ?, ?, ?, 0);`,
-        [name, qty, category || "", now]
-      );
+      if (editingItem) {
+        // ✅ UPDATE món
+        await db.runAsync(
+          `UPDATE grocery_items SET name = ?, quantity = ?, category = ? WHERE id = ?;`,
+          [name, qty, category || "", editingItem.id]
+        );
+      } else {
+        // ✅ INSERT món mới
+        const now = Math.floor(Date.now() / 1000);
+        await db.runAsync(
+          `INSERT INTO grocery_items (name, quantity, category, created_at, bought)
+           VALUES (?, ?, ?, ?, 0);`,
+          [name, qty, category || "", now]
+        );
+      }
+
       setModalVisible(false);
+      setEditingItem(null);
       setName("");
       setQuantity("1");
       setCategory("");
-      loadItems(); // reload danh sách ngay
+      loadItems();
     } catch (error) {
-      console.log("❌ Lỗi thêm món:", error);
+      console.log("❌ Lỗi lưu món:", error);
     }
   };
 
-  // ✅ Toggle bought trạng thái
+  // Toggle bought
   const toggleBought = async (item: GroceryItem) => {
     try {
       const newStatus = item.bought ? 0 : 1;
@@ -81,13 +93,21 @@ export default function MainScreen() {
         `UPDATE grocery_items SET bought = ? WHERE id = ?;`,
         [newStatus, item.id]
       );
-      // Cập nhật ngay UI
       setItems((prev) =>
         prev.map((i) => (i.id === item.id ? { ...i, bought: newStatus } : i))
       );
     } catch (error) {
       console.log("❌ Lỗi toggle bought:", error);
     }
+  };
+
+  // Mở modal edit
+  const editItem = (item: GroceryItem) => {
+    setEditingItem(item);
+    setName(item.name);
+    setQuantity(item.quantity.toString());
+    setCategory(item.category);
+    setModalVisible(true);
   };
 
   const renderItem = ({ item }: { item: GroceryItem }) => (
@@ -106,9 +126,15 @@ export default function MainScreen() {
             Số lượng: {item.quantity} | Loại: {item.category || "-"}
           </Text>
         </View>
-        <Text style={[styles.status, item.bought ? styles.bought : styles.notBought]}>
-          {item.bought ? "✓ Đã mua" : "Chưa mua"}
-        </Text>
+
+        <View style={{ alignItems: "flex-end" }}>
+          <Text style={[styles.status, item.bought ? styles.bought : styles.notBought]}>
+            {item.bought ? "✓ Đã mua" : "Chưa mua"}
+          </Text>
+          <TouchableOpacity onPress={() => editItem(item)}>
+            <Text style={{ color: "#2196F3", marginTop: 4 }}>Sửa</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -134,11 +160,11 @@ export default function MainScreen() {
         />
       )}
 
-      {/* Modal thêm mới */}
+      {/* Modal thêm/sửa */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Thêm món mới</Text>
+            <Text style={styles.modalTitle}>{editingItem ? "Sửa món" : "Thêm món mới"}</Text>
 
             <TextInput
               placeholder="Tên món *"
@@ -163,13 +189,16 @@ export default function MainScreen() {
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: "#ccc" }]}
-                onPress={() => setModalVisible(false)}
+                onPress={() => {
+                  setModalVisible(false);
+                  setEditingItem(null);
+                }}
               >
                 <Text>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: "#4CAF50" }]}
-                onPress={addItem}
+                onPress={saveItem}
               >
                 <Text style={{ color: "#fff" }}>Lưu</Text>
               </TouchableOpacity>
