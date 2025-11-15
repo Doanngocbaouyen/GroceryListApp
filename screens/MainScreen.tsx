@@ -73,18 +73,44 @@ export default function MainScreen() {
     }
   };
 
+  // ✅ Toggle bought trạng thái
+  const toggleBought = async (item: GroceryItem) => {
+    try {
+      const newStatus = item.bought ? 0 : 1;
+      await db.runAsync(
+        `UPDATE grocery_items SET bought = ? WHERE id = ?;`,
+        [newStatus, item.id]
+      );
+      // Cập nhật ngay UI
+      setItems((prev) =>
+        prev.map((i) => (i.id === item.id ? { ...i, bought: newStatus } : i))
+      );
+    } catch (error) {
+      console.log("❌ Lỗi toggle bought:", error);
+    }
+  };
+
   const renderItem = ({ item }: { item: GroceryItem }) => (
-    <View style={styles.itemContainer}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.name}>{item.name}</Text>
-        <Text style={styles.detail}>
-          Số lượng: {item.quantity} | Loại: {item.category || "-"}
+    <TouchableOpacity onPress={() => toggleBought(item)}>
+      <View style={styles.itemContainer}>
+        <View style={{ flex: 1 }}>
+          <Text
+            style={[
+              styles.name,
+              item.bought ? { textDecorationLine: "line-through", color: "#888" } : {},
+            ]}
+          >
+            {item.name}
+          </Text>
+          <Text style={styles.detail}>
+            Số lượng: {item.quantity} | Loại: {item.category || "-"}
+          </Text>
+        </View>
+        <Text style={[styles.status, item.bought ? styles.bought : styles.notBought]}>
+          {item.bought ? "✓ Đã mua" : "Chưa mua"}
         </Text>
       </View>
-      <Text style={[styles.status, item.bought ? styles.bought : styles.notBought]}>
-        {item.bought ? "Đã mua" : "Chưa mua"}
-      </Text>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
